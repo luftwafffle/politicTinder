@@ -215,6 +215,9 @@ struct ContentView: View {
     @State private var started = false
     @State private var answers: [Bool] = []
     @State private var detail: Thinker?
+    @GestureState private var swipeOffset: CGFloat = 0
+    @State private var exitOffset: CGFloat = 0
+    @State private var isChoosing = false
     private let thinkers = Thinker.all
 
     var body: some View {
@@ -231,7 +234,7 @@ struct ContentView: View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
-                        Portrait(thinker: thinker).frame(height: 240).clipShape(RoundedRectangle(cornerRadius: 24))
+                        Portrait(thinker: thinker).aspectRatio(3.0 / 4.0, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 24))
                         Text(thinker.name).font(.largeTitle.bold())
                         Text(thinker.theme).font(.title3).foregroundStyle(Palette.wine)
                         Text(thinker.era).font(.subheadline).foregroundStyle(.secondary)
@@ -265,7 +268,7 @@ struct ContentView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 28).fill(Palette.wine.opacity(0.12))
                         .rotationEffect(.degrees(-7)).padding(16)
-                    Portrait(thinker: thinkers[0])
+                    Portrait(thinker: thinkers[0], contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: 28)).padding(22)
                     Image(systemName: "heart.circle.fill")
                         .font(.system(size: 62)).foregroundStyle(Palette.wine, Palette.paper)
@@ -299,9 +302,49 @@ struct ContentView: View {
                         .font(.subheadline.monospacedDigit()).foregroundStyle(Palette.wine)
                 }
                 ProgressView(value: Double(answers.count), total: Double(thinkers.count))
-                Button { detail = thinker } label: {
+                interactiveCard(thinker)
+            }.padding(24)
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24, coordinateSpace: .global)
+                .updating($swipeOffset) { value, state, _ in
+                    guard !isChoosing else { return }
+                    if abs(value.translation.width) > abs(value.translation.height) * 1.3 {
+                        state = value.translation.width
+                    }
+                }
+                .onEnded { value in
+                    if let agrees = SwipeChoice.answer(horizontal: value.translation.width, vertical: value.translation.height) {
+                        choose(agrees)
+                    }
+                }
+        )
+        .id(thinker.id)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 12) {
+                HStack {
+                    Text("← Согласен")
+                    Spacer()
+                    Text("Не согласен →")
+                }.font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    choiceButton("Согласен", icon: "heart.fill", agrees: true)
+                    choiceButton("Не согласен", icon: "xmark", agrees: false)
+                }
+                Button {
+                    if !answers.isEmpty { answers.removeLast() }
+                } label: { Label("Предыдущая карточка", systemImage: "arrow.uturn.backward") }
+                    .font(.footnote).disabled(answers.isEmpty || isChoosing)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 12)
+            .background(Palette.paper)
+        }
+    }
+
+    private func thinkerCard(_ thinker: Thinker) -> some View {
+                Group {
                     VStack(alignment: .leading, spacing: 0) {
-                        Portrait(thinker: thinker).frame(height: 210).clipped()
+                        Portrait(thinker: thinker).aspectRatio(3.0 / 4.0, contentMode: .fit).clipped()
                         VStack(alignment: .leading, spacing: 12) {
                             Text(thinker.era).font(.caption.weight(.semibold)).foregroundStyle(Palette.wine)
                             Text(thinker.name).font(.system(size: 30, weight: .semibold, design: .serif))
@@ -315,26 +358,36 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 28))
                     .overlay(RoundedRectangle(cornerRadius: 28).stroke(Palette.ink.opacity(0.08)))
                 }
-                .buttonStyle(.plain)
+                .contentShape(RoundedRectangle(cornerRadius: 28))
+                .onTapGesture { if !isChoosing { detail = thinker } }
+                .accessibilityElement(children: .ignore)
+                .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(thinker.name + ". " + thinker.era + ". " + thinker.statement)
                 .accessibilityHint("Открыть информацию о политических взглядах")
-            }.padding(24)
-        }
-        .id(thinker.id)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    choiceButton("Согласен", icon: "heart.fill", agrees: true)
-                    choiceButton("Не согласен", icon: "xmark", agrees: false)
+
+    }
+
+    private func interactiveCard(_ thinker: Thinker) -> some View {
+        thinkerCard(thinker)
+                .overlay(alignment: .top) {
+                    if abs(swipeOffset) > 24 || isChoosing {
+                        let agrees = (isChoosing ? exitOffset : swipeOffset) < 0
+                        Label(agrees ? "Согласен" : "Не согласен",
+                              systemImage: agrees ? "heart.fill" : "xmark")
+                            .font(.title3.bold()).padding(16)
+                            .foregroundStyle(.white)
+                            .background(agrees ? Color.green.opacity(0.9) : Palette.wine,
+                                        in: RoundedRectangle(cornerRadius: 14))
+                            .padding(20)
+                            .allowsHitTesting(false)
+                    }
                 }
-                Button {
-                    if !answers.isEmpty { answers.removeLast() }
-                } label: { Label("Предыдущая карточка", systemImage: "arrow.uturn.backward") }
-                    .font(.footnote).disabled(answers.isEmpty)
-            }
-            .padding(.horizontal, 24).padding(.vertical, 12)
-            .background(Palette.paper)
-        }
+                .offset(x: isChoosing ? exitOffset : swipeOffset)
+                .rotationEffect(.degrees(Double(isChoosing ? exitOffset : swipeOffset) / 30))
+                .opacity(isChoosing ? 0 : 1)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: swipeOffset == 0)
+                .accessibilityAction(named: "Согласен") { choose(true) }
+                .accessibilityAction(named: "Не согласен") { choose(false) }
     }
 
     private var conclusion: some View {
@@ -387,10 +440,25 @@ struct ContentView: View {
         }.buttonStyle(.plain)
     }
 
+    private func choose(_ agrees: Bool) {
+        guard !isChoosing, answers.count < thinkers.count else { return }
+        withAnimation(.easeIn(duration: 0.22), completionCriteria: .logicallyComplete) {
+            isChoosing = true
+            exitOffset = agrees ? -600 : 600
+        } completion: {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                answers.append(agrees)
+                exitOffset = 0
+                isChoosing = false
+            }
+        }
+    }
+
     private func choiceButton(_ title: String, icon: String, agrees: Bool) -> some View {
         Button {
-            guard answers.count < thinkers.count else { return }
-            answers.append(agrees)
+            choose(agrees)
         } label: {
             VStack(spacing: 8) {
                 Image(systemName: icon).font(.title2.weight(.semibold))
@@ -399,12 +467,13 @@ struct ContentView: View {
             .frame(maxWidth: .infinity).padding(.vertical, 18)
             .foregroundStyle(agrees ? Color.white : Palette.wine)
             .background(agrees ? Palette.wine : Palette.wine.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).disabled(isChoosing)
     }
 }
 
 private struct Portrait: View {
     let thinker: Thinker
+    var contentMode: ContentMode = .fill
 
     var body: some View {
         GeometryReader { geometry in
@@ -412,8 +481,8 @@ private struct Portrait: View {
                 thinker.color.opacity(0.3)
                 Image(thinker.portraitName)
                     .resizable()
-                    .scaledToFit()
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .aspectRatio(contentMode: contentMode)
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
                     
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -427,3 +496,4 @@ private struct Portrait: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View { ContentView() }
 }
+
