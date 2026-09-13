@@ -342,29 +342,50 @@ struct ContentView: View {
     }
 
     private func thinkerCard(_ thinker: Thinker) -> some View {
-                Group {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Portrait(thinker: thinker).aspectRatio(3.0 / 4.0, contentMode: .fit).clipped()
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(thinker.era).font(.caption.weight(.semibold)).foregroundStyle(Palette.wine)
-                            Text(thinker.name).font(.system(size: 30, weight: .semibold, design: .serif))
-                            Text("«" + thinker.statement + "»")
-                                .font(.body).foregroundStyle(.secondary)
-                            Label("Нажми, чтобы узнать больше", systemImage: "info.circle")
-                                .font(.footnote).foregroundStyle(Palette.wine)
-                        }.padding(24)
-                    }
-                    .background(.white.opacity(0.8))
-                    .clipShape(RoundedRectangle(cornerRadius: 28))
-                    .overlay(RoundedRectangle(cornerRadius: 28).stroke(Palette.ink.opacity(0.08)))
+        ZStack(alignment: .bottomLeading) {
+            Color.clear.aspectRatio(3.0 / 4.0, contentMode: .fit)
+            VStack(alignment: .leading, spacing: 12) {
+                Spacer(minLength: 100)
+                Text(thinker.era)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                Text(thinker.name)
+                    .font(.system(.title, design: .serif, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("«" + thinker.statement + "»")
+                    .font(.body.weight(.medium))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Label("Нажми, чтобы узнать больше", systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            .foregroundStyle(.white)
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background {
+            Portrait(thinker: thinker)
+                .overlay {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black.opacity(0.12), location: 0.25),
+                            .init(color: .black.opacity(0.78), location: 0.55),
+                            .init(color: .black.opacity(0.94), location: 1)
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 28))
-                .onTapGesture { if !isChoosing { detail = thinker } }
-                .accessibilityElement(children: .ignore)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel(thinker.name + ". " + thinker.era + ". " + thinker.statement)
-                .accessibilityHint("Открыть информацию о политических взглядах")
-
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28))
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(.white.opacity(0.12)))
+        .contentShape(RoundedRectangle(cornerRadius: 28))
+        .onTapGesture { if !isChoosing { detail = thinker } }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(thinker.name + ". " + thinker.era + ". " + thinker.statement)
+        .accessibilityHint("Открыть информацию о политических взглядах")
     }
 
     private func interactiveCard(_ thinker: Thinker) -> some View {
